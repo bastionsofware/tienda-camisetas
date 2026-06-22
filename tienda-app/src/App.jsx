@@ -101,6 +101,227 @@ function emptyGastoForm() {
   };
 }
 
+/* ─────────────── GENERADOR DE IMAGEN DE PEDIDO ─────────────── */
+async function generarImagenPedido(order, tipo, shopName) {
+  const nombreTienda = shopName || localStorage.getItem('tc_shopName') || 'Mi Tienda';
+  const items = tipo === 'prendas'
+    ? (order.prendas || [])
+    : (order.articulos || []);
+
+  const ANCHO = 800;
+  const HEADER_H = 130;
+  const SECCION_CLIENTE_H = 120;
+  const ITEM_H = 58;
+  const TOTAL_H = 80;
+  const FOOTER_H = 50;
+  const PAD = 30;
+  const ALTO = HEADER_H + SECCION_CLIENTE_H + Math.max(items.length, 1) * ITEM_H + 20 + TOTAL_H + FOOTER_H;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = ANCHO;
+  canvas.height = ALTO;
+  const ctx = canvas.getContext('2d');
+
+  // Helpers
+  function roundRect(x, y, w, h, r, fill) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+  }
+  function truncar(txt, maxW) {
+    if (ctx.measureText(txt).width <= maxW) return txt;
+    while (txt.length > 0 && ctx.measureText(txt + '…').width > maxW) txt = txt.slice(0, -1);
+    return txt + '…';
+  }
+
+  // Fondo general
+  ctx.fillStyle = '#F3F4F6';
+  ctx.fillRect(0, 0, ANCHO, ALTO);
+
+  // ── HEADER ──
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fillRect(0, 0, ANCHO, HEADER_H);
+
+  // Franja roja izquierda
+  ctx.fillStyle = '#CC0000';
+  ctx.fillRect(0, 0, 6, HEADER_H);
+
+  // Logo
+  try {
+    const logoImg = await new Promise((res, rej) => {
+      const img = new Image();
+      img.onload = () => res(img);
+      img.onerror = rej;
+      img.src = LOGO_B64;
+    });
+    ctx.drawImage(logoImg, PAD, 15, 95, 95);
+  } catch (_) {}
+
+  // Nombre tienda
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 26px system-ui, Arial, sans-serif';
+  ctx.fillText(truncar(nombreTienda, 500), 145, 60);
+  ctx.font = '14px system-ui, Arial, sans-serif';
+  ctx.fillStyle = '#CC0000';
+  ctx.fillText('COMPROBANTE DE PEDIDO', 145, 88);
+  ctx.fillStyle = '#888888';
+  ctx.font = '12px system-ui, Arial, sans-serif';
+  ctx.fillText(new Date().toLocaleDateString('es-CO', { day:'2-digit', month:'long', year:'numeric' }), 145, 112);
+
+  // ── SECCIÓN CLIENTE ──
+  let y = HEADER_H + 16;
+  roundRect(PAD, y, ANCHO - PAD * 2, SECCION_CLIENTE_H - 16, 8, '#ffffff');
+
+  // Línea izquierda roja
+  ctx.fillStyle = '#CC0000';
+  ctx.fillRect(PAD, y, 4, SECCION_CLIENTE_H - 16);
+
+  ctx.fillStyle = '#1a1a1a';
+  ctx.font = 'bold 18px system-ui, Arial, sans-serif';
+  ctx.fillText(truncar(order.cliente || '—', 500), PAD + 20, y + 30);
+
+  ctx.fillStyle = '#555555';
+  ctx.font = '14px system-ui, Arial, sans-serif';
+  const linea2Parts = [];
+  if (order.telefono) linea2Parts.push('📞 ' + order.telefono);
+  if (order.fecha) linea2Parts.push('📅 ' + order.fecha.split('-').reverse().join('/'));
+  ctx.fillText(linea2Parts.join('   '), PAD + 20, y + 58);
+
+  if (order.descripcion) {
+    ctx.fillStyle = '#777777';
+    ctx.font = '13px system-ui, Arial, sans-serif';
+    ctx.fillText(truncar(order.descripcion, ANCHO - PAD * 2 - 40), PAD + 20, y + 82);
+  }
+
+  // Badge estado
+  const estadoC = ESTADO_COLORS[order.estadoPedido] || ESTADO_COLORS['Pendiente'];
+  const badgeX = ANCHO - PAD - 120;
+  const badgeY = y + 18;
+  roundRect(badgeX, badgeY, 110, 28, 6, estadoC.bg);
+  ctx.fillStyle = estadoC.text;
+  ctx.font = 'bold 12px system-ui, Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(order.estadoPedido, badgeX + 55, badgeY + 18);
+  ctx.textAlign = 'left';
+
+  // ── ITEMS ──
+  y = HEADER_H + SECCION_CLIENTE_H + 10;
+
+  // Cabecera tabla
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fillRect(PAD, y, ANCHO - PAD * 2, 32);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 12px system-ui, Arial, sans-serif';
+  ctx.fillText('ÍTEM', PAD + 12, y + 20);
+  ctx.textAlign = 'right';
+  ctx.fillText('VALOR', ANCHO - PAD - 12, y + 20);
+  ctx.textAlign = 'left';
+  y += 32;
+
+  items.forEach((item, idx) => {
+    const bg = idx % 2 === 0 ? '#ffffff' : '#F9FAFB';
+    ctx.fillStyle = bg;
+    ctx.fillRect(PAD, y, ANCHO - PAD * 2, ITEM_H);
+
+    // Línea separadora
+    ctx.fillStyle = '#E5E7EB';
+    ctx.fillRect(PAD, y + ITEM_H - 1, ANCHO - PAD * 2, 1);
+
+    ctx.fillStyle = '#1a1a1a';
+    ctx.font = 'bold 13px system-ui, Arial, sans-serif';
+
+    if (tipo === 'prendas') {
+      const titulo = `${item.tipo || 'Camiseta'} · ${item.talla} · ${item.color || 'sin color'} · ${item.modelo}`;
+      ctx.fillText(truncar(titulo, 520), PAD + 12, y + 22);
+      if (item.diseno) {
+        ctx.fillStyle = '#888888';
+        ctx.font = '12px system-ui, Arial, sans-serif';
+        ctx.fillText(truncar(`Diseño: ${item.diseno} (${item.posicionDiseno || 'Adelante'})`, 520), PAD + 12, y + 42);
+      }
+      ctx.fillStyle = '#CC0000';
+      ctx.font = 'bold 14px system-ui, Arial, sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(formatCOP(item.valor), ANCHO - PAD - 12, y + 22);
+      ctx.textAlign = 'left';
+    } else {
+      const subtotal = (Number(item.cantidad) || 0) * (Number(item.valor) || 0);
+      ctx.fillText(truncar(`${item.tipo || 'Artículo'}`, 400), PAD + 12, y + 22);
+      ctx.fillStyle = '#888888';
+      ctx.font = '12px system-ui, Arial, sans-serif';
+      ctx.fillText(`x${item.cantidad} unidades · ${formatCOP(item.valor)} c/u`, PAD + 12, y + 42);
+      ctx.fillStyle = '#CC0000';
+      ctx.font = 'bold 14px system-ui, Arial, sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(formatCOP(subtotal), ANCHO - PAD - 12, y + 22);
+      ctx.textAlign = 'left';
+    }
+    y += ITEM_H;
+  });
+
+  // ── TOTAL ──
+  y += 4;
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fillRect(PAD, y, ANCHO - PAD * 2, TOTAL_H);
+
+  const saldo = Math.max((Number(order.precioVenta) || 0) - (Number(order.montoPagado) || 0), 0);
+
+  ctx.fillStyle = '#888888';
+  ctx.font = '13px system-ui, Arial, sans-serif';
+  ctx.fillText('TOTAL DEL PEDIDO', PAD + 20, y + 26);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 26px system-ui, Arial, sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText(formatCOP(order.precioVenta), ANCHO - PAD - 20, y + 54);
+  ctx.textAlign = 'left';
+
+  if (saldo > 0) {
+    ctx.fillStyle = '#CC0000';
+    ctx.font = 'bold 13px system-ui, Arial, sans-serif';
+    ctx.fillText(`Por cobrar: ${formatCOP(saldo)}`, PAD + 20, y + 54);
+  } else {
+    ctx.fillStyle = '#4ADE80';
+    ctx.font = 'bold 13px system-ui, Arial, sans-serif';
+    ctx.fillText('✓ Pagado', PAD + 20, y + 54);
+  }
+
+  // ── FOOTER ──
+  y += TOTAL_H;
+  ctx.fillStyle = '#E5E7EB';
+  ctx.fillRect(PAD, y + 10, ANCHO - PAD * 2, 1);
+  ctx.fillStyle = '#9CA3AF';
+  ctx.font = '12px system-ui, Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(nombreTienda + ' · Gracias por tu pedido', ANCHO / 2, y + 32);
+  ctx.textAlign = 'left';
+
+  // Descargar / compartir
+  const blob = await new Promise((res) => canvas.toBlob(res, 'image/png'));
+  const nombreArchivo = `pedido-${(order.cliente || 'cliente').replace(/\s+/g, '-').toLowerCase()}.png`;
+
+  if (navigator.share && navigator.canShare && navigator.canShare({ files: [new File([blob], nombreArchivo, { type: 'image/png' })] })) {
+    await navigator.share({
+      title: `Pedido de ${order.cliente}`,
+      files: [new File([blob], nombreArchivo, { type: 'image/png' })],
+    });
+  } else {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nombreArchivo;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 3000);
+  }
+}
+
 function EstadoTag({ estado }) {
   const c = ESTADO_COLORS[estado] || ESTADO_COLORS['Pendiente'];
   return (
@@ -208,6 +429,15 @@ function OrderCard({ order, isConfirmingDelete, onEdit, onRequestDelete, onCance
 
           {!isConfirmingDelete ? (
             <div className="flex items-center gap-1">
+              <button
+                onClick={() => generarImagenPedido(order, 'prendas', shopName)}
+                className="flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold text-white"
+                style={{ backgroundColor: '#CC0000' }}
+                title="Compartir pedido"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                Compartir
+              </button>
               <button onClick={() => onEdit(order)} className="p-1.5 rounded text-gray-500 hover:bg-gray-100" aria-label="Editar pedido">
                 <Pencil size={15} />
               </button>
@@ -291,6 +521,15 @@ function ItemOrderCard({ order, isConfirmingDelete, onEdit, onRequestDelete, onC
 
           {!isConfirmingDelete ? (
             <div className="flex items-center gap-1">
+              <button
+                onClick={() => generarImagenPedido(order, 'articulos', shopName)}
+                className="flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold text-white"
+                style={{ backgroundColor: '#CC0000' }}
+                title="Compartir pedido"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                Compartir
+              </button>
               <button onClick={() => onEdit(order)} className="p-1.5 rounded text-gray-500 hover:bg-gray-100" aria-label="Editar pedido">
                 <Pencil size={15} />
               </button>
