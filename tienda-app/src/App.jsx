@@ -2388,12 +2388,12 @@ export default function TiendaCamisetas() {
         <span className="text-xs text-white/60 hidden sm:block shrink-0">{orders.length + itemOrders.length} pedidos registrados</span>
       </div>
 
-      <div className="bg-white border-b border-gray-200 flex px-2">
-        {[['resumen','Resumen'],['pedidos','Pedidos Prendas'],['articulos','Pedidos Artículos'],['gastos','Gastos'],['clientes','Clientes'],['calendario','Calendario'],['inventario','Inventario'],['pendientes','Pendientes']].map(([key, label]) => (
+      <div className="bg-white border-b border-gray-200 flex overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        {[['resumen','Resumen'],['pedidos','Prendas'],['articulos','Artículos'],['gastos','Gastos'],['clientes','Clientes'],['calendario','Calendario'],['inventario','Inventario'],['pendientes','Pendientes']].map(([key, label]) => (
           <button
             key={key}
             onClick={() => setTab(key)}
-            className="px-4 py-3 text-sm font-semibold border-b-2 transition-colors"
+            className="px-3 py-3 text-xs font-semibold border-b-2 transition-colors whitespace-nowrap shrink-0"
             style={tab === key ? { borderColor: '#CC0000', color: '#1a1a1a' } : { borderColor: 'transparent', color: '#9CA3AF' }}
           >
             {label}
